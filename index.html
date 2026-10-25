@@ -24,7 +24,7 @@
 *,*::before,*::after{box-sizing:border-box}
 html{scroll-padding-top:calc(var(--nav-h) + 16px + env(safe-area-inset-top,0px));-webkit-text-size-adjust:100%}
 @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
-body{margin:0;background:var(--bg);color:var(--text);font:400 1rem/1.65 var(--font);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--text);transition:background-color .35s,color .35s;font:400 1rem/1.65 var(--font);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow-x:hidden}
 ::selection{background:rgb(var(--c1-rgb) / .3);color:var(--text)}
 img{max-width:100%}
 a{color:inherit}
@@ -49,12 +49,20 @@ p{text-wrap:pretty}
 .nav a{padding:8px 14px;border-radius:999px;color:var(--muted);font-size:.9rem;font-weight:500;text-decoration:none;transition:color .2s,background-color .2s}
 .nav a:hover{color:var(--text)}
 .nav a.active{color:var(--text);background:var(--surface-2)}
+.theme-pick{display:flex;align-items:center;gap:7px;margin-left:10px;padding-left:16px;border-left:1px solid var(--line)}
+.theme-pick:empty{display:none}
+.theme-pick button{width:22px;height:22px;flex:none;padding:0;border-radius:50%;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--line-strong);cursor:pointer;transition:transform .2s,box-shadow .2s}
+.theme-pick button:hover{transform:scale(1.15)}
+.theme-pick button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--text)}
 .menu-btn{display:none;width:42px;height:42px;flex:none;place-items:center;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer}
 .menu-btn .i-close{display:none}
 .menu-btn[aria-expanded="true"] .i-menu{display:none}
 .menu-btn[aria-expanded="true"] .i-close{display:block}
-@media (max-width:760px){
+@media (max-width:880px){
   .menu-btn{display:grid}
+  .theme-pick{gap:12px;margin:8px 0 0;padding:16px 14px 4px;border-left:0;border-top:1px solid var(--line)}
+  .theme-pick::before{content:"Theme";margin-right:auto;color:var(--muted);font-size:1rem;font-weight:500}
+  .theme-pick button{width:30px;height:30px}
   .nav{display:none;position:absolute;left:0;right:0;top:100%;flex-direction:column;align-items:stretch;gap:2px;padding:8px 16px 16px;background:var(--bg);border-bottom:1px solid var(--line);box-shadow:0 24px 40px -24px rgb(0 0 0 / .6)}
   .topbar.open .nav{display:flex}
   .nav a{padding:12px 14px;font-size:1rem;border-radius:12px}
@@ -267,6 +275,7 @@ input[type=color]::-moz-color-swatch{border:0;border-radius:6px}
     <button class="menu-btn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg class="i i-menu"><use href="#i-menu"/></svg><svg class="i i-close"><use href="#i-x"/></svg></button>
     <nav class="nav" id="nav" aria-label="Sections">
       <a href="#about">About</a><a href="#skills">Skills</a><a href="#projects">Projects</a><a href="#certs">Certificates</a><a href="#contact">Contact</a>
+      <div class="theme-pick" id="themePick" role="group" aria-label="Color theme"></div>
     </nav>
   </div>
 </header>
@@ -598,6 +607,7 @@ function render(){
   $("c1").value = S.c1; $("c2").value = S.c2; $("bg").value = S.bg;
   var cur = [S.c1, S.c2, S.bg].join(",").toLowerCase();
   document.querySelectorAll(".presets button").forEach(function(b){ b.classList.toggle("on", b.dataset.p.toLowerCase() === cur) });
+  document.querySelectorAll("#themePick button").forEach(function(b){ b.setAttribute("aria-pressed", THEMES[+b.dataset.t].c.join(",").toLowerCase() === cur ? "true" : "false") });
   favicon(ini, ink);
 }
 function commit(msg){ var ok = save(); render(); if (msg && ok) toast(msg) }
@@ -637,6 +647,25 @@ document.querySelectorAll(".presets button").forEach(function(b){
   b.insertAdjacentHTML("afterbegin", '<span class="sw" style="background:linear-gradient(135deg,' + p[0] + ' 0 50%,' + p[1] + ' 50% 100%)"></span>');
   b.onclick = function(){ S.c1 = p[0]; S.c2 = p[1]; S.bg = p[2]; commit(label + " theme applied") };
 });
+/* ---------- Theme buttons for visitors (built from the presets above) ---------- */
+var THEME_KEY = "superglenn-theme";
+var THEMES = [].map.call(document.querySelectorAll(".presets button"), function(b){ return {name: b.textContent.trim(), c: b.dataset.p.split(",")} });
+$("themePick").innerHTML = THEMES.map(function(t, i){
+  return '<button type="button" data-t="' + i + '" aria-label="' + attr(t.name) + ' theme" title="' + attr(t.name) + '" style="background:linear-gradient(135deg,' + t.c[0] + ' 0 50%,' + t.c[1] + ' 50% 100%)"></button>';
+}).join("");
+function useTheme(t){ S.c1 = t.c[0]; S.c2 = t.c[1]; S.bg = t.c[2] }
+$("themePick").addEventListener("click", function(e){
+  var b = e.target.closest("button"); if (!b) return;
+  var t = THEMES[+b.dataset.t]; useTheme(t);
+  if (canEdit()) return commit(t.name + " theme applied"); // in edit mode it changes your saved draft
+  try { sessionStorage.setItem(THEME_KEY, t.name) } catch(err){} // visitors: remembered until they close the tab
+  render();
+});
+function sessionTheme(){
+  if (canEdit()) return;
+  try { var n = sessionStorage.getItem(THEME_KEY); THEMES.some(function(t){ if (t.name === n){ useTheme(t); return true } }) } catch(e){}
+}
+
 $("reset").onclick = function(){
   if (confirm("Reset everything to the default content and colors?")){ S = clone(DEF); commit("Reset to defaults"); setEdit(true) }
 };
@@ -696,7 +725,7 @@ addEventListener("scroll", onScroll, {passive: true});
 function showGear(){ $("gear").hidden = !canEdit() }
 addEventListener("hashchange", showGear);
 
-load(); render(); setEdit(false); onScroll(); showGear();
+load(); sessionTheme(); render(); setEdit(false); onScroll(); showGear();
 
 if ("IntersectionObserver" in window){
   var links = {};
