@@ -408,7 +408,7 @@ input[type=color]::-moz-color-swatch{border:0;border-radius:6px}
     <button class="btn primary sm" id="exportBtn" type="button"><svg class="i"><use href="#i-download"/></svg>Download site</button>
     <button class="btn ghost sm danger" id="reset" type="button"><svg class="i"><use href="#i-reset"/></svg>Reset</button>
   </div>
-  <p class="hint">Edits are saved in this browser only. Click <b>Download site</b> to get an updated index.html with your changes built in, then publish that file. Use × on an item to delete it.</p>
+  <p class="hint">Edits are saved in this browser only, and only show while the address ends with ?edit. Click <b>Download site</b> to get an updated index.html with your changes built in, then publish that file. Use × on an item to delete it.</p>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
 
@@ -468,8 +468,17 @@ var S, tt;
 
 function $(i){ return document.getElementById(i) }
 function clone(o){ return JSON.parse(JSON.stringify(o)) }
-function load(){ try { var r = localStorage.getItem(KEY); S = r ? Object.assign(clone(DEF), JSON.parse(r)) : clone(DEF) } catch(e){ S = clone(DEF) } }
-function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); return true } catch(e){ toast("Couldn’t save — browser storage is full or blocked"); return false } }
+function hashStr(s){ var h = 5381; for (var i = 0; i < s.length; i++) h = (h * 33 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36) }
+var BASE = hashStr(JSON.stringify(DEF)); // identifies the published version
+function canEdit(){ return /[?&#]edit\b/i.test(location.search + location.hash) }
+// Without ?edit everyone (you included) sees exactly the published content.
+// Saved drafts only load in edit mode, and drafts made on an older published version are dropped.
+function load(){
+  S = clone(DEF);
+  if (!canEdit()) return;
+  try { var d = JSON.parse(localStorage.getItem(KEY) || "null"); if (d && d.base === BASE && d.data) S = Object.assign(S, d.data) } catch(e){}
+}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify({base: BASE, data: S})); return true } catch(e){ toast("Couldn’t save — browser storage is full or blocked"); return false } }
 function esc(s){ var d = document.createElement("div"); d.textContent = s == null ? "" : s; return d.innerHTML }
 function attr(s){ return esc(s).replace(/"/g, "&quot;") }
 function safe(u){ return /^(https?:|mailto:)/i.test(u || "") ? u : "" }
@@ -684,7 +693,7 @@ function onScroll(){ topbar.classList.toggle("scrolled", window.scrollY > 8) }
 addEventListener("scroll", onScroll, {passive: true});
 
 // The Edit button only shows when the address ends with ?edit or #edit, so visitors never see it.
-function showGear(){ $("gear").hidden = !/[?&#]edit\b/i.test(location.search + location.hash) }
+function showGear(){ $("gear").hidden = !canEdit() }
 addEventListener("hashchange", showGear);
 
 load(); render(); setEdit(false); onScroll(); showGear();
